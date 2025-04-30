@@ -29,7 +29,7 @@ DISPLAY_SWITCH = 27
 GPS_SWITCH = 22
 SEND_SWITCH = 23
 
-#Desired 
+#Enter dired coordinates
 FIXED_LONG = 9.008371
 FIXED_LAT = 48.702709
 
@@ -38,7 +38,7 @@ DATEN_PFAD = '/home/airscout/messdaten/'
 if not os.path.exists(DATEN_PFAD):		#creates folder if doesnt exist yet
     os.makedirs(DATEN_PFAD)
 
-# API URL
+# API URL, link to website
 URL = "https://www.gm4s.eu/api/addMarker"
 
 # GPIO einrichten
@@ -50,13 +50,13 @@ GPIO.setup(SEND_SWITCH, GPIO.IN)
 # Display Initialisierung
 epd = epd1in54b_V2.EPD()
 epd.init()
-font = ImageFont.truetype("/home/airscout/AirScout-main/Font.ttc", 24)
+font = ImageFont.truetype("/home/airscout/AirScout-main/Font.ttc", 24) #get font
 
 q = queue.Queue(maxsize=1)		#only one measurement of the sensors can be stored in the queue at once
 
 # Event für sauberen Thread-Stopp
 stop_event = threading.Event()
-
+#define display function
 def display():
     """ Zeigt Messwerte auf dem e-Paper Display an. """
     DISPLAY_LAST = 0
@@ -71,7 +71,7 @@ def display():
         DISPLAY_NOW = GPIO.input(DISPLAY_SWITCH)
         
         if not q.empty():
-            data_read = json.loads(q.get())
+            data_read = json.loads(q.get()) #load saved sensor values
             if DISPLAY_NOW == 0:
                 drawblack.text((0, 0), f'Part 1: {data_read.get("part_1", get_pm_1_0())}', font=font, fill=0)
                 drawblack.text((0, 22), f'Part 2.5: {data_read.get("part_2_5", get_pm_2_5())}', font=font, fill=0)
@@ -109,15 +109,16 @@ def display():
         DISPLAY_LAST = DISPLAY_NOW
         time.sleep(DISPLAY_DELAY)
 
+#define measure function
 def messen():
     """ Misst Sensordaten und speichert sie lokal. """
     while not stop_event.is_set():
         sensor_data = read_sensor_data()
-        if GPIO.input(GPS_SWITCH) == 0:
+        if GPIO.input(GPS_SWITCH) == 0:    #if the switch is set to GPS "OFF" it will use fixed Coordinates
             data = {
                 "long": FIXED_LONG,
                 "lat": FIXED_LAT,
-                "token": "f36f1180-66f3-4b35-a6ec-34a85d17198f",
+                "token": "f36f1180-66f3-4b35-a6ec-34a85d17198f",    #is given by the websites manager to gain access
                 **sensor_data
             }
         else:
@@ -127,8 +128,8 @@ def messen():
                 gps_data = gps_readerV2.readGPS()  # Call function directly to get GPS data
                 time.sleep(0.1)
  
-            print(gps_data)
-            print("GPS connection established")
+            print(gps_data)    #once GPS connection was established the script continue here
+            print("GPS connection established")    
 
             data = {
                 "long": gps_data["longitude"],
@@ -139,9 +140,9 @@ def messen():
 
         if not q.empty():
             q.get_nowait()
-        q.put(json.dumps(data))
+        q.put(json.dumps(data))    #puts all the measuremants in a queue
 
-        # Speichern, wenn SEND_SWITCH gedrückt ist
+        # save measurements when the switch is set so save
         dateiname = f"messung_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         print(dateiname)
         with open(os.path.join(DATEN_PFAD, dateiname), 'w') as f:
@@ -156,7 +157,7 @@ def messen():
                 if p.endswith(".json") and os.path.isfile(p):
                     try:
                         with open(p, "r", encoding="utf-8") as file:
-                            r = urequests.post(URL, json=json.load(file))
+                            r = urequests.post(URL, json=json.load(file))    #upoload the measurements to the website
                         if r.status_code == 201:
                             os.remove(p)
                             #print(f"{f} erfolgreich gesendet und gelöscht.")
@@ -164,7 +165,7 @@ def messen():
                         print(f"Fehler bei {f}: {e}")
         time.sleep(MEASURE_DELAY)
 
-# Threads starten
+# start thread so the display can be controlled while the script runs
 display_thread = threading.Thread(target=display, daemon=True)
 messen_thread = threading.Thread(target=messen, daemon=True)
 
